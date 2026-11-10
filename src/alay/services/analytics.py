@@ -36,6 +36,16 @@ _BY_STATUS = text(
     GROUP BY status
     """
 )
+# "Blocked by the source": CAPTCHA / login wall, or an access refusal (403 / 429).
+_BLOCKED = text(
+    """
+    SELECT count(*) FROM checks
+    WHERE source = :source AND (CAST(:adapter_id AS text) IS NULL OR adapter_id = CAST(:adapter_id AS text))
+      AND checked_at > CAST(:since AS timestamptz) AND checked_at <= CAST(:now AS timestamptz)
+      AND (status IN ('CAPTCHA_REQUIRED', 'LOGIN_REQUIRED')
+           OR (status = 'ERROR' AND error IN ('access_denied_403', 'rate_limited')))
+    """
+)
 _EVENTS = text(
     """
     SELECT count(*) FROM slot_events
@@ -99,12 +109,14 @@ async def compute_analytics(
             limitations.append(f"Нет проверок за период {key}.")
 
     day = periods["24h"]
-    blocked = day.by_status.get("CAPTCHA_REQUIRED", 0) + day.by_status.get("LOGIN_REQUIRED", 0)
-    if day.checks_total and blocked * 2 > day.checks_total:
-        limitations.append(
-            f"За 24ч {blocked} из {day.checks_total} проверок остановлены CAPTCHA или логином: "
-            "данные о слотах недоступны."
-        )
+    if day.checks_total:
+        p = {"source": source.value, "adapter_id": adapter_id, "since": now - PERIODS["24h"], "now": now}
+        blocked = (await session.execute(_BLOCKED, p)).scalar_one()
+        if blocked * 2 > day.checks_total:
+            limitations.append(
+                f"За 24ч {blocked} из {day.checks_total} проверок заблокированы источником "
+                "(CAPTCHA, вход или отказ в доступе): данные о слотах недоступны."
+            )
     if source is Source.DEMO:
         limitations.append("Демонстрационные данные mock-vfs, не реальные наблюдения.")
 

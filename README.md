@@ -170,7 +170,7 @@ class MyOperatorAdapter(BaseAdapter):
 
 ## Тесты
 
-150 тестов, внешняя сеть не используется. Интеграционные тесты идут на реальном PostgreSQL.
+152 теста, внешняя сеть не используется. Интеграционные тесты идут на реальном PostgreSQL.
 
 В Docker (ничего устанавливать не надо):
 
@@ -195,7 +195,7 @@ uv run pytest
    Ответ содержит статус, `raw.rule`, `raw.http_status` и `evidence_url` со скриншотом (`/evidence/...`). На момент написания: `ERROR access_denied_403`, скриншот в `docs/examples/live-vfs-403.png`. Раньше с curl приходила страница Cloudflare Waiting Room с Turnstile, это `CAPTCHA_REQUIRED`.
 3. Успешный путь на mock-vfs: `curl -X POST "localhost:8000/adapters/mock-available/check?wait=true"`. Браузер проходит вход и выбор центра, статус `AVAILABLE` с датами, скриншот в `evidence_url`.
 4. Ошибки и ретраи: `curl -X POST "localhost:8000/adapters/mock-slow/check?wait=true"`. Занимает около 40 с; `docker compose logs worker` показывает три попытки, итог `ERROR timeout`, `attempts: 3`. Остальные сценарии: `mock-no-slots`, `mock-waitlist`, `mock-captcha`, `mock-login-wall`, `mock-server-error`, `mock-changed-layout`.
-5. История: `/checks`, `/slot-events` (адаптер `mock-istanbul-tourism` раз в минуту проходит по сценариям по кругу, поэтому события появляются сами).
+5. История: `/checks`, `/slot-events` (по расписанию работают только два адаптера: live `vfs-tur-fra-istanbul-tourism` раз в 60 минут и `mock-istanbul-tourism` раз в минуту, он проходит по сценариям по кругу, поэтому события появляются сами; остальные `mock-*` запускаются только вручную).
 6. `/dashboard`: переключатель Live / Demo (в Demo постоянный баннер «Демонстрационные данные»), блок «Ограничения источника».
 7. Отказоустойчивость: `docker compose stop worker`, `/health` показывает `degraded` (`workers_alive: 0`); `docker compose start worker` возвращает `ok`. При жёстком убийстве worker'а статус сменится, когда heartbeat станет старше 60 с.
 8. Новый центр: раскомментировать Ankara в `adapters.yaml`, `docker compose run --rm migrate`, `GET /adapters`.

@@ -1,59 +1,59 @@
 {
     "source": "demo",
-    "generated_at": "2026-11-10T21:14:41.703152Z",
+    "generated_at": "2026-11-10T21:21:16.828996Z",
     "periods": {
         "24h": {
-            "checks_total": 9,
+            "checks_total": 15,
             "by_status": {
-                "AVAILABLE": 3,
-                "CAPTCHA_REQUIRED": 1,
-                "ERROR": 2,
-                "NO_SLOTS": 2,
-                "WAITLIST": 1
+                "AVAILABLE": 4,
+                "CAPTCHA_REQUIRED": 2,
+                "ERROR": 3,
+                "NO_SLOTS": 4,
+                "WAITLIST": 2
             },
-            "technical_success_rate": 0.778,
-            "errors": 2,
-            "avg_response_time_ms": 37.7,
-            "p95_response_time_ms": 85.3,
-            "avg_duration_ms": 6388.7,
-            "available_observations": 3,
-            "slot_events": 1,
+            "technical_success_rate": 0.8,
+            "errors": 3,
+            "avg_response_time_ms": 50.8,
+            "p95_response_time_ms": 161.0,
+            "avg_duration_ms": 4909.1,
+            "available_observations": 4,
+            "slot_events": 3,
             "insufficient_data": false
         },
         "7d": {
-            "checks_total": 9,
+            "checks_total": 15,
             "by_status": {
-                "AVAILABLE": 3,
-                "CAPTCHA_REQUIRED": 1,
-                "ERROR": 2,
-                "NO_SLOTS": 2,
-                "WAITLIST": 1
+                "AVAILABLE": 4,
+                "CAPTCHA_REQUIRED": 2,
+                "ERROR": 3,
+                "NO_SLOTS": 4,
+                "WAITLIST": 2
             },
-            "technical_success_rate": 0.778,
-            "errors": 2,
-            "avg_response_time_ms": 37.7,
-            "p95_response_time_ms": 85.3,
-            "avg_duration_ms": 6388.7,
-            "available_observations": 3,
-            "slot_events": 1,
+            "technical_success_rate": 0.8,
+            "errors": 3,
+            "avg_response_time_ms": 50.8,
+            "p95_response_time_ms": 161.0,
+            "avg_duration_ms": 4909.1,
+            "available_observations": 4,
+            "slot_events": 3,
             "insufficient_data": false
         },
         "30d": {
-            "checks_total": 9,
+            "checks_total": 15,
             "by_status": {
-                "AVAILABLE": 3,
-                "CAPTCHA_REQUIRED": 1,
-                "ERROR": 2,
-                "NO_SLOTS": 2,
-                "WAITLIST": 1
+                "AVAILABLE": 4,
+                "CAPTCHA_REQUIRED": 2,
+                "ERROR": 3,
+                "NO_SLOTS": 4,
+                "WAITLIST": 2
             },
-            "technical_success_rate": 0.778,
-            "errors": 2,
-            "avg_response_time_ms": 37.7,
-            "p95_response_time_ms": 85.3,
-            "avg_duration_ms": 6388.7,
-            "available_observations": 3,
-            "slot_events": 1,
+            "technical_success_rate": 0.8,
+            "errors": 3,
+            "avg_response_time_ms": 50.8,
+            "p95_response_time_ms": 161.0,
+            "avg_duration_ms": 4909.1,
+            "available_observations": 4,
+            "slot_events": 3,
             "insufficient_data": false
         }
     },
@@ -221,19 +221,19 @@
         },
         {
             "bucket": "2026-11-11T00:00:00+03:00",
-            "checks": 9,
-            "available": 3,
-            "errors": 2,
+            "checks": 15,
+            "available": 4,
+            "errors": 3,
             "by_status": {
-                "WAITLIST": 1,
-                "AVAILABLE": 3,
-                "NO_SLOTS": 2,
-                "ERROR": 2,
-                "CAPTCHA_REQUIRED": 1
+                "WAITLIST": 2,
+                "AVAILABLE": 4,
+                "NO_SLOTS": 4,
+                "ERROR": 3,
+                "CAPTCHA_REQUIRED": 2
             }
         }
     ],
     "limitations": [
-        "\u0420\u201d\u0420\u00b5\u0420\u0458\u0420\u0455\u0420\u0405\u0421\u0403\u0421\u201a\u0421\u0402\u0420\u00b0\u0421\u2020\u0420\u0451\u0420\u0455\u0420\u0405\u0420\u0405\u0421\u2039\u0420\u00b5 \u0420\u0491\u0420\u00b0\u0420\u0405\u0420\u0405\u0421\u2039\u0420\u00b5 mock-vfs, \u0420\u0405\u0420\u00b5 \u0421\u0402\u0420\u00b5\u0420\u00b0\u0420\u00bb\u0421\u040a\u0420\u0405\u0421\u2039\u0420\u00b5 \u0420\u0405\u0420\u00b0\u0420\u00b1\u0420\u00bb\u0421\u040b\u0420\u0491\u0420\u00b5\u0420\u0405\u0420\u0451\u0421\u040f."
+        "Демонстрационные данные mock-vfs, не реальные наблюдения."
     ]
 }

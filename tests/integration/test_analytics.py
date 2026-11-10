@@ -25,14 +25,14 @@ async def seed_adapter(session, adapter_id="a1", source="live"):
 
 
 async def add_check(session, status, *, age=timedelta(hours=1), source="live", adapter_id="a1",
-                    response_ms=None, duration_ms=1000, at=None):
+                    response_ms=None, duration_ms=1000, at=None, error=None):
     await seed_adapter(session, adapter_id, source)
     job = CheckJobRow(id=uuid.uuid4(), adapter_id=adapter_id, trigger="scheduled", status="done")
     session.add(job)
     await session.flush()
     row = CheckRow(
         job_id=job.id, adapter_id=adapter_id, checked_at=at or (NOW - age), status=status,
-        source=source, response_time_ms=response_ms, duration_ms=duration_ms,
+        source=source, response_time_ms=response_ms, duration_ms=duration_ms, error=error,
     )
     session.add(row)
     await session.flush()
@@ -154,9 +154,35 @@ async def test_captcha_limitation_message(sessionmaker):
         await add_check(s, "NO_SLOTS")
         await s.commit()
     out = await run(sessionmaker)
-    assert "За 24ч 5 из 6 проверок остановлены CAPTCHA или логином: данные о слотах недоступны." in out.limitations
+    assert "За 24ч 5 из 6 проверок заблокированы источником (CAPTCHA, вход или отказ в доступе): данные о слотах недоступны." in out.limitations
     assert "Нет проверок за период 24h." not in out.limitations
     assert "Нет проверок за период 7d." not in out.limitations
+
+
+BLOCKED_MSG = "заблокированы источником"
+
+
+async def test_access_denied_counts_as_blocked(sessionmaker):
+    async with sessionmaker() as s:
+        for _ in range(3):
+            await add_check(s, "ERROR", error="access_denied_403")
+        await add_check(s, "NO_SLOTS")
+        await s.commit()
+    out = await run(sessionmaker)
+    assert (
+        "За 24ч 3 из 4 проверок заблокированы источником (CAPTCHA, вход или отказ в доступе): "
+        "данные о слотах недоступны."
+    ) in out.limitations
+
+
+async def test_timeout_errors_do_not_count_as_blocked(sessionmaker):
+    async with sessionmaker() as s:
+        for _ in range(3):
+            await add_check(s, "ERROR", error="timeout: Page.goto")
+        await add_check(s, "NO_SLOTS")
+        await s.commit()
+    out = await run(sessionmaker)
+    assert not any(BLOCKED_MSG in m for m in out.limitations)
 
 
 async def test_no_checks_messages_and_live_has_no_demo_message(sessionmaker):

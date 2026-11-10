@@ -353,7 +353,7 @@ Swagger: `/docs`. Ответы — Pydantic-модели. Времена — ISO
 - **available_observations** — число проверок со статусом `AVAILABLE`.
 - **timeline** — почасовые корзины за 24ч или подневные за 7д/30д (`date_trunc`), параметр `bucket=hour|day`.
 - **insufficient_data** — `true`, если в периоде меньше `MIN_CHECKS_FOR_STATS` (по умолчанию 5) проверок; тогда проценты = `null`.
-- **limitations** — генерируется правилами: доля `CAPTCHA_REQUIRED`/`LOGIN_REQUIRED` > 50% → пояснение; нет данных → пояснение; `source=demo` → «демонстрационные данные».
+- **limitations** — генерируется правилами: доля проверок, заблокированных источником (`CAPTCHA_REQUIRED`, `LOGIN_REQUIRED`, `ERROR` с `access_denied_403` или `rate_limited`), > 50% за 24ч → пояснение; нет данных → пояснение; `source=demo` → «демонстрационные данные».
 
 ### Dashboard
 
