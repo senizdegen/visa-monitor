@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     executor_idle_s: float = 1
     heartbeat_s: float = 15
     shutdown_grace_s: float = 60
-    manual_wait_s: int = 60
+    manual_wait_s: float = 60
     min_checks_for_stats: int = 5
     live_checks_enabled: bool = True
     headful: bool = False
