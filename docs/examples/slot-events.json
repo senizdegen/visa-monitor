@@ -1,0 +1,15 @@
+[
+    {
+        "id": 1,
+        "adapter_id": "mock-available",
+        "check_id": 4,
+        "detected_at": "2026-11-11T00:12:08.449525+03:00",
+        "event_type": "APPEARED",
+        "dates_before": [],
+        "dates_after": [
+            "2026-11-18",
+            "2026-11-20"
+        ],
+        "source": "demo"
+    }
+]

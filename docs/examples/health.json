@@ -1,0 +1,6 @@
+{
+    "status": "ok",
+    "database": true,
+    "workers_alive": 1,
+    "stale_pending_jobs": 0
+}

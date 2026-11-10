@@ -1,0 +1,35 @@
+{
+    "job_id": "cb49b7f3-4866-4ed6-96e8-a1bd70ac21c1",
+    "status": "done",
+    "deduplicated": false,
+    "result": {
+        "id": 10,
+        "adapter_id": "mock-available",
+        "job_id": "cb49b7f3-4866-4ed6-96e8-a1bd70ac21c1",
+        "source_country": "Turkey",
+        "destination_country": "France",
+        "provider": "Mock VFS (demo)",
+        "center": "Istanbul",
+        "visa_category": "Tourism",
+        "checked_at": "2026-11-11T00:13:08.542095+03:00",
+        "status": "AVAILABLE",
+        "available_dates": [
+            "2026-11-18",
+            "2026-11-20"
+        ],
+        "slots_count": 2,
+        "has_waitlist": false,
+        "source": "demo",
+        "error": null,
+        "response_time_ms": 26,
+        "attempts": 1,
+        "duration_ms": 1389,
+        "evidence_url": "/evidence/mock-available/20261110T211308.png",
+        "raw": {
+            "rule": "available",
+            "step": "result",
+            "final_url": "http://mock-vfs:8081/available/booking",
+            "http_status": null
+        }
+    }
+}
