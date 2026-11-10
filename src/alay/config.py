@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     default_interval_minutes: int = 60
     scheduler_tick_s: int = 5
     worker_concurrency: int = 3
-    check_timeout_s: int = 90
-    check_total_timeout_s: int = 150
+    check_timeout_s: float = 90
+    check_total_timeout_s: float = 150
     retry_attempts: int = 3
     retry_wait_base_s: int = 2
     job_lease_s: int = 180
