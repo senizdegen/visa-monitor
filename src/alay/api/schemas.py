@@ -166,3 +166,32 @@ class HealthOut(BaseModel):
     database: bool
     workers_alive: int
     stale_pending_jobs: int
+
+
+class PeriodStats(BaseModel):
+    checks_total: int
+    by_status: dict[str, int]
+    technical_success_rate: float | None
+    errors: int
+    avg_response_time_ms: float | None
+    p95_response_time_ms: float | None
+    avg_duration_ms: float | None
+    available_observations: int
+    slot_events: int
+    insufficient_data: bool
+
+
+class TimelineBucket(BaseModel):
+    bucket: datetime
+    checks: int
+    available: int
+    errors: int
+    by_status: dict[str, int]
+
+
+class AnalyticsOut(BaseModel):
+    source: str
+    generated_at: datetime
+    periods: dict[Literal["24h", "7d", "30d"], PeriodStats]
+    timeline: list[TimelineBucket]
+    limitations: list[str]

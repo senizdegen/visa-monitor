@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from alay.api.routes import adapters, checks, health, jobs
+from alay.api.routes import adapters, analytics, checks, health, jobs
 from alay.config import Settings, get_settings
 from alay.db.session import create_engine, make_sessionmaker
 
@@ -27,7 +27,7 @@ def create_app(settings: Settings | None = None, sessionmaker=None) -> FastAPI:
     app = FastAPI(title="alay visa monitor", lifespan=lifespan)
     app.state.settings = settings
     app.state.sessionmaker = sessionmaker
-    for r in (adapters.router, jobs.router, checks.router, health.router):
+    for r in (adapters.router, jobs.router, checks.router, health.router, analytics.router):
         app.include_router(r)
     app.mount(
         "/evidence", StaticFiles(directory=Path(settings.evidence_dir), check_dir=False), name="evidence"
