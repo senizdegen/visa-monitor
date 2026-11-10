@@ -295,13 +295,13 @@ class BaseAdapter(ABC):
   RETURNING *;
   ```
 - Аренда `JOB_LEASE_S` = 180 с; должна быть больше `CHECK_TIMEOUT_S` (90 с) × попытки — проверка ограничена общим таймаутом 150 с.
-- Задача с `claim_count > MAX_CLAIMS` → `failed` + `checks` `ERROR worker_lost`.
+- Задача, у которой аренда истекла после `MAX_CLAIMS` захватов (`claim_count >= MAX_CLAIMS`), → `failed` + `checks` `ERROR worker_lost`.
 - Если исполнитель ничего не взял — пауза `EXECUTOR_IDLE_S` (1 с).
 
 ### 7.3 Сервис проверки (`services/checks.py`, общий для worker'а и тестов)
 
 1. Создать адаптер из реестра.
-2. `tenacity`: повтор только на `TransientSourceError`, до `RETRY_ATTEMPTS` (3), экспоненциально 2 → 4 → 8 с; каждая попытка внутри `asyncio.timeout(CHECK_TIMEOUT_S)`.
+2. `tenacity`: повтор только на `TransientSourceError`, до `RETRY_ATTEMPTS` (3 попытки), паузы между ними экспоненциальные: 2 с, затем 4 с (`RETRY_WAIT_BASE_S` = 2); каждая попытка внутри `asyncio.timeout(CHECK_TIMEOUT_S)`.
 3. Исчерпаны попытки → `CheckResult(status=ERROR, error=<последняя ошибка>)`. Неожиданное исключение адаптера → `ERROR` `adapter_crash: …` + лог с traceback.
 4. Одна транзакция: `INSERT checks` → вычислить и при необходимости `INSERT slot_events` (§5.4) → `check_jobs.status='done'`, `finished_at`. Если `locked_by` уже не наш (аренду перехватили) — откат, лог предупреждения.
 
