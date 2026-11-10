@@ -86,7 +86,7 @@ asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 ```
-`.gitignore`: `.venv/ __pycache__/ data/ .env .pytest_cache/`.
+`.gitignore`: `.venv/ __pycache__/ data/ .env .pytest_cache/`. `.gitattributes`: `* text=auto eol=lf` (the dev box is Windows; CRLF in shell/SQL files breaks Linux containers).
 
 - [ ] **Step 2: Compose with Postgres**
 
