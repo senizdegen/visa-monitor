@@ -275,7 +275,7 @@ class BaseAdapter(ABC):
 ### 7.1 Планировщик (каждые `SCHEDULER_TICK_S`, по умолчанию 5 с)
 
 Одна транзакция:
-1. `SELECT id, interval_minutes FROM adapters WHERE enabled AND next_run_at <= now() FOR UPDATE SKIP LOCKED`.
+1. `SELECT id, interval_minutes FROM adapters WHERE enabled AND next_run_at <= now() FOR NO KEY UPDATE SKIP LOCKED`. Именно `NO KEY UPDATE`, а не `FOR UPDATE`: вставка в `check_jobs` проверяет внешний ключ через `FOR KEY SHARE` на строке адаптера, и с `FOR UPDATE` параллельная ручная проверка ловит deadlock.
 2. Для каждого: `INSERT INTO check_jobs (…, trigger='scheduled', status='pending') ON CONFLICT DO NOTHING` (частичный уникальный индекс).
 3. `UPDATE adapters SET next_run_at = now() + interval_minutes * interval '1 minute'`.
 
@@ -290,7 +290,8 @@ class BaseAdapter(ABC):
          locked_until = now() + :lease, started_at = coalesce(started_at, now()),
          claim_count = claim_count + 1
   WHERE id IN (SELECT id FROM check_jobs
-               WHERE status='pending' OR (status='running' AND locked_until < now())
+               WHERE status='pending'
+                  OR (status='running' AND locked_until < now() AND claim_count < :max_claims)
                ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT :free)
   RETURNING *;
   ```
