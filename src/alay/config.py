@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     default_interval_minutes: int = 60
-    scheduler_tick_s: int = 5
+    scheduler_tick_s: float = 5
     worker_concurrency: int = 3
     check_timeout_s: float = 90
     check_total_timeout_s: float = 150
@@ -25,9 +25,9 @@ class Settings(BaseSettings):
     retry_wait_base_s: int = 2
     job_lease_s: int = 180
     max_claims: int = 3
-    executor_idle_s: int = 1
-    heartbeat_s: int = 15
-    shutdown_grace_s: int = 60
+    executor_idle_s: float = 1
+    heartbeat_s: float = 15
+    shutdown_grace_s: float = 60
     manual_wait_s: int = 60
     min_checks_for_stats: int = 5
     live_checks_enabled: bool = True
