@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Мониторинг визовых слотов</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f5f6f8; color: #1d2330; }
+  header { background: #1d2330; color: #fff; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 18px; margin: 0; flex: 1; }
+  .toggle a { color: #cbd2e0; text-decoration: none; padding: 4px 12px; border-radius: 4px; }
+  .toggle a.active { background: #3b6cf6; color: #fff; }
+  #demo-banner { background: #f6c343; color: #3a2d00; text-align: center; padding: 8px; font-weight: 600; }
+  #demo-banner[hidden] { display: none; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px 24px; }
+  h2 { font-size: 16px; margin: 24px 0 8px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .card { background: #fff; border-radius: 8px; padding: 12px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .card h3 { margin: 0 0 8px; font-size: 14px; color: #5b6475; }
+  .card dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; font-size: 14px; }
+  .card dt { color: #5b6475; } .card dd { margin: 0; font-weight: 600; text-align: right; }
+  .panel { background: #fff; border-radius: 8px; padding: 12px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e6e8ee; white-space: nowrap; }
+  th { color: #5b6475; font-weight: 600; }
+  #limitations { font-size: 13px; color: #5b6475; }
+  #error { color: #b3261e; font-size: 13px; }
+  .meta { font-size: 12px; color: #5b6475; margin-top: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Мониторинг визовых слотов</h1>
+  <nav class="toggle">
+    <a href="/dashboard?source=live"{% if source == "live" %} class="active"{% endif %}>Live</a>
+    <a href="/dashboard?source=demo"{% if source == "demo" %} class="active"{% endif %}>Demo</a>
+  </nav>
+</header>
+{% if source == "demo" %}<div id="demo-banner">Демонстрационные данные</div>{% else %}<div id="demo-banner" hidden>Демонстрационные данные</div>{% endif %}
+<main>
+  <div id="error"></div>
+  <h2>Периоды</h2>
+  <div class="cards" id="cards"></div>
+  <h2>Проверки за 24 часа по статусам</h2>
+  <div class="panel"><canvas id="timeline" height="110"></canvas></div>
+  <h2>Последние проверки</h2>
+  <div class="panel"><table id="checks"><thead><tr>
+    <th>Время</th><th>Центр</th><th>Категория</th><th>Статус</th><th>Слоты</th><th>Ответ, мс</th><th>Ошибка</th><th>Доказательство</th>
+  </tr></thead><tbody></tbody></table></div>
+  <h2>События слотов</h2>
+  <div class="panel"><table id="events"><thead><tr>
+    <th>Время</th><th>Площадка</th><th>Событие</th><th>Было</th><th>Стало</th>
+  </tr></thead><tbody></tbody></table></div>
+  <h2>Ограничения</h2>
+  <ul id="limitations"></ul>
+  <div class="meta" id="meta"></div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var SOURCE = {{ source | tojson }};
+  var DASH = "—";
+  var COLORS = {AVAILABLE: "#2e9e5b", NO_SLOTS: "#9aa3b5", WAITLIST: "#e0a82e",
+    LOGIN_REQUIRED: "#7a5af8", CAPTCHA_REQUIRED: "#d9622b", ERROR: "#d92d20", UNKNOWN: "#475467"};
+  var chart = null;
+
+  function q(sel) { return document.querySelector(sel); }
+  function el(tag, text) { var e = document.createElement(tag); if (text !== undefined) { e.textContent = text; } return e; }
+  function val(v, suffix) { return (v === null || v === undefined) ? DASH : String(v) + (suffix || ""); }
+  function fmtTime(s) { return s ? s.replace("T", " ").slice(0, 19) : DASH; }
+  function getJSON(path, params) {
+    var qs = new URLSearchParams(params).toString();
+    return fetch(path + "?" + qs).then(function (r) {
+      if (!r.ok) { throw new Error(path + ": HTTP " + r.status); }
+      return r.json();
+    });
+  }
+
+  function renderCards(periods) {
+    var box = q("#cards"); box.replaceChildren();
+    ["24h", "7d", "30d"].forEach(function (name) {
+      var p = periods[name]; if (!p) { return; }
+      var ins = p.insufficient_data;
+      var card = el("div"); card.className = "card";
+      card.appendChild(el("h3", "За " + name + (ins ? " (недостаточно данных)" : "")));
+      var dl = el("dl");
+      [["Проверок", val(p.checks_total)],
+       ["Техн. успешность", (ins || p.technical_success_rate === null) ? DASH : (Math.round(p.technical_success_rate * 1000) / 10) + "%"],
+       ["Ошибок", val(p.errors)],
+       ["Средняя длительность", ins ? DASH : val(p.avg_duration_ms, " мс")]
+      ].forEach(function (row) { dl.appendChild(el("dt", row[0])); dl.appendChild(el("dd", row[1])); });
+      card.appendChild(dl); box.appendChild(card);
+    });
+  }
+
+  function renderChart(timeline) {
+    var statuses = [];
+    timeline.forEach(function (b) {
+      Object.keys(b.by_status || {}).forEach(function (s) { if (statuses.indexOf(s) < 0) { statuses.push(s); } });
+    });
+    var data = {
+      labels: timeline.map(function (b) { return b.bucket; }),
+      datasets: statuses.map(function (s) {
+        return {label: s, backgroundColor: COLORS[s] || "#999",
+          data: timeline.map(function (b) { return (b.by_status || {})[s] || 0; })};
+      })
+    };
+    if (typeof Chart === "undefined") { return; }
+    if (chart) { chart.data = data; chart.update(); return; }
+    chart = new Chart(q("#timeline"), {type: "bar", data: data,
+      options: {scales: {x: {stacked: true}, y: {stacked: true, beginAtZero: true, ticks: {precision: 0}}}}});
+  }
+
+  function fillTable(sel, rows, cells) {
+    var body = q(sel + " tbody"); body.replaceChildren();
+    if (!rows.length) {
+      var tr0 = el("tr"), td0 = el("td", "Нет данных"); td0.colSpan = 8; tr0.appendChild(td0); body.appendChild(tr0); return;
+    }
+    rows.forEach(function (row) {
+      var tr = el("tr");
+      cells(row).forEach(function (c) {
+        var td = el("td");
+        if (c instanceof Node) { td.appendChild(c); } else { td.textContent = c; }
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+  }
+
+  function evidence(url) {
+    if (!url) { return DASH; }
+    var a = el("a", "скриншот"); a.href = url; a.target = "_blank"; a.rel = "noopener"; return a;
+  }
+
+  function renderChecks(rows) {
+    fillTable("#checks", rows, function (c) {
+      return [fmtTime(c.checked_at), c.center, c.visa_category, c.status,
+        c.status === "AVAILABLE" ? (c.slots_count === null ? c.available_dates.join(", ") : String(c.slots_count)) : DASH,
+        val(c.response_time_ms), c.error || DASH, evidence(c.evidence_url)];
+    });
+  }
+
+  function renderEvents(rows) {
+    fillTable("#events", rows, function (e) {
+      return [fmtTime(e.detected_at), e.adapter_id, e.event_type,
+        (e.dates_before || []).join(", ") || DASH, (e.dates_after || []).join(", ") || DASH];
+    });
+  }
+
+  function renderLimitations(list) {
+    var ul = q("#limitations"); ul.replaceChildren();
+    (list || []).forEach(function (t) { ul.appendChild(el("li", t)); });
+  }
+
+  function refresh() {
+    Promise.all([
+      getJSON("/analytics", {source: SOURCE, timeline: "24h"}),
+      getJSON("/checks", {source: SOURCE, limit: 20}),
+      getJSON("/slot-events", {source: SOURCE, limit: 20})
+    ]).then(function (res) {
+      q("#error").textContent = "";
+      renderCards(res[0].periods);
+      renderChart(res[0].timeline);
+      renderLimitations(res[0].limitations);
+      renderChecks(res[1]);
+      renderEvents(res[2]);
+      q("#meta").textContent = "Обновлено: " + fmtTime(res[0].generated_at) + " · автообновление каждые 30 с";
+    }).catch(function (err) { q("#error").textContent = "Ошибка загрузки: " + err.message; });
+  }
+
+  refresh();
+  setInterval(refresh, 30000);
+})();
+</script>
+</body>
+</html>
