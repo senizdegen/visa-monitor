@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from alay.config import get_settings
 from alay.db.session import create_engine, make_sessionmaker
 from alay.domain import AdapterSpec
+from tests.db_guard import unsafe_test_db_reason
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -33,7 +34,11 @@ def adapter_spec() -> AdapterSpec:
 
 @pytest_asyncio.fixture(scope="session")
 async def engine():
-    url = get_settings().test_database_url
+    settings = get_settings()
+    url = settings.test_database_url
+    reason = unsafe_test_db_reason(url, settings.database_url)
+    if reason:
+        pytest.exit(f"refusing to DROP SCHEMA public: {reason}", returncode=2)
     raw = create_async_engine(url, isolation_level="AUTOCOMMIT")
     async with raw.connect() as conn:
         await conn.execute(text("DROP SCHEMA public CASCADE"))
