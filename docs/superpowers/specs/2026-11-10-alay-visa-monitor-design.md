@@ -29,7 +29,7 @@
 Следствия:
 
 1. Слоты видны только после входа в аккаунт, вход закрыт CAPTCHA. Live-адаптер честно определяет и сохраняет `CAPTCHA_REQUIRED` / `LOGIN_REQUIRED`.
-2. Статусы `AVAILABLE`, `NO_SLOTS`, `WAITLIST` демонстрируются демо-адаптером (`source="demo"`) и проверяются тестами на HTML-фикстурах. Фикстуры для страниц за логином — синтетические, составлены по публично известным текстам VFS, и помечены так в тестах и документации.
+2. Статусы `AVAILABLE`, `NO_SLOTS`, `WAITLIST` демонстрируются на локальном учебном сайте `mock-vfs` (§6.4): тот же `VfsGlobalAdapter` проходит на нём весь путь браузером — вход, выбор центра и категории, чтение ответа. Такие адаптеры имеют `source="demo"`. Страницы `mock-vfs` за «логином» — синтетические, составлены по публично известным текстам VFS, и помечены так в коде и документации.
 3. Live-проверки идут с минимальной частотой (по умолчанию раз в 60 минут), без маскировки браузера, и отключаются одной переменной `LIVE_CHECKS_ENABLED=false`.
 
 ## 3. Компоненты
@@ -39,7 +39,8 @@ docker compose
 ├── postgres   — единственное хранилище и координатор очереди
 ├── migrate    — разово: alembic upgrade head + синхронизация adapters.yaml → БД
 ├── api        — FastAPI: REST, Swagger (/docs), dashboard (/dashboard)
-└── worker     — asyncio-процесс: планировщик + исполнитель + heartbeat, Playwright Chromium
+├── worker     — asyncio-процесс: планировщик + исполнитель + heartbeat, Playwright Chromium
+└── mock-vfs   — учебный сайт, имитирующий путь записи VFS, для воспроизводимых демо (§6.4)
 ```
 
 `api` и `worker` — один Python-пакет `alay`, разные точки входа. Между собой общаются только через PostgreSQL. Любой сервис можно запускать в нескольких экземплярах.
@@ -76,7 +77,8 @@ docker compose
 | Колонка | Тип | Описание |
 |---|---|---|
 | `id` | text PK | читаемый ключ, напр. `vfs-tur-fra-istanbul-tourism` |
-| `adapter_type` | text | ключ класса в реестре: `vfs_global`, `demo` |
+| `adapter_type` | text | ключ класса в реестре: `vfs_global` |
+| `source` | text | `live` (реальный источник) \| `demo` (mock-vfs); копируется в каждый результат |
 | `source_country` | text | `Turkey` |
 | `destination_country` | text | `France` |
 | `provider` | text | `VFS Global` |
@@ -191,16 +193,32 @@ class BaseAdapter(ABC):
 ```
 
 - `AdapterSpec` — строка `adapters` (метаданные + `config`).
-- `AdapterContext` — общие ресурсы worker'а: браузер Playwright, логгер, каталог для evidence, `run_number` (число предыдущих проверок этого адаптера; считает сервис проверки).
+- `AdapterContext` — общие ресурсы worker'а: браузер Playwright, логгер, каталог для evidence.
 - Реестр: `@register("vfs_global")` кладёт класс в словарь `ADAPTER_TYPES`. Worker находит класс по `adapter_type`; неизвестный тип → `ERROR` `unknown_adapter_type`.
 - Адаптер бросает `TransientSourceError` для временных сбоев (таймаут, сеть, HTTP 5xx) — их ретраит сервис (§7). Всё остальное адаптер возвращает как `CheckResult`.
 
-### 6.3 `VfsGlobalAdapter` (`source="live"`)
+### 6.3 `VfsGlobalAdapter`
 
-Два шага:
+Один класс для реального VFS (`source="live"`) и для `mock-vfs` (`source="demo"`); различаются только `config`. Адаптер повторяет путь человека и после каждого шага смотрит, не упёрся ли он в стену.
 
-1. **fetch** — новый `BrowserContext` (изоляция cookies), `page.goto(config.url)`, ожидание `networkidle` в пределах `config.timeout_s`, затем `PageSnapshot(final_url, http_status, html, response_time_ms)` и скриншот в `evidence/`. Контекст закрывается всегда.
-2. **classify(snapshot) → CheckResult** — чистая функция, без сети. Правила по порядку, маркеры берутся из `config` (со значениями по умолчанию):
+**Сценарий (`navigate`)** — в новом `BrowserContext` (изоляция cookies), каждое действие с таймаутом `config.timeout_s`:
+
+| Шаг | Действие | Если не вышло |
+|---|---|---|
+| 1 | `page.goto(config.start_url)`, замер `response_time_ms` | classify → обычно `CAPTCHA_REQUIRED` / `ERROR` |
+| 2 | Страница входа? Если `config.login` не задан → `LOGIN_REQUIRED`. Иначе заполнить email/пароль, нажать «Sign In» | classify |
+| 3 | Нажать «Start New Booking» | classify → `UNKNOWN` |
+| 4 | Выбрать центр (`config.center_label`), категорию, подкатегорию в выпадающих списках по подписи поля | classify → `UNKNOWN` |
+| 5 | Дождаться блока с ответом о слотах (`config.selectors.result`) | `UNKNOWN` |
+| 6 | classify финальной страницы | — |
+
+После остановки делается `PageSnapshot(final_url, http_status, html, step)` и скриншот в `evidence/`. Контекст закрывается всегда. Номер шага, на котором остановились, пишется в `raw.step`.
+
+**Защита от автоматического входа на реальный сайт.** Шаг 2 с заполнением пароля выполняется, только если хост `start_url` есть в `LOGIN_ALLOWED_HOSTS` (по умолчанию `mock-vfs,localhost`). Для `vfsglobal.com` адаптер возвращает `LOGIN_REQUIRED` даже при заданных учётных данных.
+
+Селекторы находятся по видимым подписям (`get_by_role`, `get_by_label`, `get_by_text`), а тексты — в `config.selectors`, со значениями по умолчанию под VFS.
+
+**classify(snapshot) → CheckResult** — чистая функция, без сети. Правила по порядку, маркеры берутся из `config` (со значениями по умолчанию):
 
 | # | Условие | Результат |
 |---|---|---|
@@ -216,14 +234,34 @@ class BaseAdapter(ABC):
 
 Сработавшее правило пишется в `raw.rule`. Браузер запускается без stealth-плагинов и подмены отпечатков.
 
-URL по умолчанию для Istanbul: `https://visa.vfsglobal.com/tur/en/fra/login`.
+`start_url` по умолчанию для Istanbul: `https://visa.vfsglobal.com/tur/en/fra/login`.
 
-### 6.4 `DemoAdapter` (`source="demo"`)
+### 6.4 `mock-vfs` — учебный сайт для демонстраций
 
-- `config.scenario`: список шагов, напр. `[NO_SLOTS, AVAILABLE:+8,+10, AVAILABLE:+10, NO_SLOTS, WAITLIST, CAPTCHA_REQUIRED, ERROR]`; `+8` — дата «сегодня + 8 дней».
-- Номер шага = `ctx.run_number` по модулю длины сценария — воспроизводимо и не зависит от перезапусков.
-- Шаг `ERROR` бросает `TransientSourceError` (демонстрирует ретраи); шаг `ERROR!` — ошибка без ретрая.
-- Небольшая искусственная задержка (`config.delay_ms`), чтобы метрики времени были ненулевые.
+Небольшое FastAPI-приложение в том же репозитории (`alay.mock_vfs`), отдельный сервис в compose (порт 8081). На каждой странице баннер «Mock VFS — тестовый сайт, не связан с VFS Global». Логотипов и фирменного стиля VFS нет.
+
+Страницы повторяют путь записи:
+- `/{scenario}/login` — форма входа (демо-логин из `.env.example`); контент дорисовывается JavaScript через ~0.5 с, как на настоящем SPA;
+- `/{scenario}/dashboard` — кнопка «Start New Booking»;
+- `/{scenario}/booking` — три выпадающих списка (центр, категория, подкатегория); после выбора JS запрашивает `/api/slots` и показывает блок с ответом.
+
+Сценарии (`{scenario}` в URL):
+
+| Сценарий | Что показывает сайт | Ожидаемый статус |
+|---|---|---|
+| `available` | «Earliest available slot … : DD-MM-YYYY» + даты (сегодня +8 и +10 дней) | `AVAILABLE` |
+| `no-slots` | «No appointment slots are currently available» | `NO_SLOTS` |
+| `waitlist` | сообщение о листе ожидания | `WAITLIST` |
+| `captcha` | страница «Waiting Room» с маркерами Turnstile | `CAPTCHA_REQUIRED` |
+| `login-wall` | форма входа, демо-логин не задан в адаптере | `LOGIN_REQUIRED` |
+| `server-error` | HTTP 503 | ретраи → `ERROR` |
+| `slow` | ответ через 120 с | таймаут → ретраи → `ERROR` |
+| `changed-layout` | кнопки переименованы | `UNKNOWN` |
+| `rotate` | каждую минуту следующий из сценариев выше по кругу (по номеру минуты) | меняется |
+
+В `adapters.yaml` по умолчанию: `mock-istanbul-tourism` на `rotate` с интервалом 1 минута (копит историю для dashboard и даёт `slot_events`). Остальные сценарии используются для ручной проверки на созвоне и в тестах.
+
+Страницы `mock-vfs` — это синтетика по публично известным текстам VFS; они проверяют, что сценарий браузера и classify работают, но не доказывают, что реальный VFS выглядит так же.
 
 ### 6.5 Добавление центров и операторов
 
@@ -278,7 +316,7 @@ Swagger: `/docs`. Ответы — Pydantic-модели. Времена — ISO
 | Метод и путь | Описание |
 |---|---|
 | `GET /adapters` | список адаптеров: метаданные, `enabled`, `interval_minutes`, `next_run_at`, последний статус |
-| `POST /adapters/{id}/check` | создаёт `manual`-задачу. `202 {job_id, status, deduplicated}`; при существующей активной задаче — её же с `deduplicated=true`. `404` — нет адаптера, `409` — адаптер выключен или это live-адаптер при `LIVE_CHECKS_ENABLED=false`. `?wait=true` — ждать результата до 60 с (опрос БД раз в 0.5 с), затем `200` с результатом или `202` |
+| `POST /adapters/{id}/check` | создаёт `manual`-задачу. `202 {job_id, status, deduplicated}`; при существующей активной задаче — её же с `deduplicated=true`. `404` — нет адаптера, `409` — live-адаптер при `LIVE_CHECKS_ENABLED=false`. `enabled=false` выключает только расписание; вручную такой адаптер запустить можно. `?wait=true` — ждать результата до 60 с (опрос БД раз в 0.5 с), затем `200` с результатом или `202` |
 | `GET /jobs/{id}` | статус задачи + результат (если есть) |
 | `GET /checks` | история. Фильтры: `adapter_id, status, source, since, until`; `limit` (≤ 500, по умолч. 50), `offset`; сортировка по `checked_at DESC` |
 | `GET /availability` | последний результат по каждому включённому адаптеру; фильтр `source` |
@@ -339,9 +377,16 @@ Swagger: `/docs`. Ответы — Pydantic-модели. Времена — ISO
 | `RETRY_ATTEMPTS` | `3` |
 | `JOB_LEASE_S` / `MAX_CLAIMS` | `180` / `3` |
 | `EVIDENCE_DIR` | `/data/evidence` |
+| `LOGIN_ALLOWED_HOSTS` | `mock-vfs,localhost` |
+| `MOCK_VFS_EMAIL` / `MOCK_VFS_PASSWORD` | демо-логин для mock-vfs |
+| `HEADFUL` | `false` (true — окно браузера видно; только при локальном запуске worker'а) |
 | `LOG_LEVEL` | `INFO` |
 
-`adapters.yaml` по умолчанию: `vfs-tur-fra-istanbul-tourism` (live, 60 мин) и `demo-tur-fra-istanbul-tourism` (demo, 1 мин). Закомментированные примеры для Ankara, Izmir, Gaziantep.
+`adapters.yaml` по умолчанию:
+- `vfs-tur-fra-istanbul-tourism` — live, `https://visa.vfsglobal.com/tur/en/fra/login`, 60 мин;
+- `mock-istanbul-tourism` — demo, `http://mock-vfs:8081/rotate/login`, 1 мин;
+- `mock-<scenario>` — demo, по одному на сценарий §6.4, `enabled: false` (вне расписания, только ручной запуск);
+- закомментированные примеры live для Ankara, Izmir, Gaziantep.
 
 ## 11. Обработка ошибок — сводка
 
@@ -367,13 +412,14 @@ alay/
 │   ├── config.py            # pydantic-settings
 │   ├── logging.py           # JSON-логи
 │   ├── domain.py            # CheckStatus, CheckResult, AdapterSpec
-│   ├── adapters/            # base.py, registry.py, vfs_global.py, vfs_classifier.py, demo.py
+│   ├── adapters/            # base.py, registry.py, vfs_global.py, vfs_classifier.py
+│   ├── mock_vfs/            # app.py, templates/ — учебный сайт
 │   ├── db/                  # models.py, session.py, repositories/
 │   ├── services/            # checks.py, slot_events.py, analytics.py, adapters_sync.py
 │   ├── worker/              # main.py, scheduler.py, executor.py, browser.py, heartbeat.py
 │   └── api/                 # main.py, routes/, schemas.py, templates/dashboard.html
 ├── tests/
-│   ├── fixtures/vfs/*.html  # captcha, login, no_slots*, waitlist*, available* (* синтетические)
+│   ├── fixtures/vfs/*.html  # captcha_real.html (сохранён с реального сайта), остальные синтетические
 │   ├── unit/
 │   └── integration/
 └── docs/
@@ -381,11 +427,13 @@ alay/
 
 ## 13. Тестирование
 
-pytest + pytest-asyncio; интеграционные тесты на реальном PostgreSQL (`TEST_DATABASE_URL`, в compose — `docker compose run --rm tests`). Сеть в тестах не используется.
+pytest + pytest-asyncio; интеграционные тесты на реальном PostgreSQL (`TEST_DATABASE_URL`, в compose — `docker compose run --rm tests`). Внешняя сеть в тестах не используется.
 
-- **classify**: каждый статус на фикстурах; маркеры из `config` переопределяются.
+- **classify**: каждый статус на фикстурах, включая реальную страницу Cloudflare; маркеры из `config` переопределяются.
 - **CheckResult**: инварианты §6.1.
-- **DemoAdapter**: воспроизводимая последовательность.
+- **VfsGlobalAdapter на mock-vfs** (Playwright, mock-vfs поднимается в тесте через uvicorn на свободном порту): каждый сценарий §6.4 даёт ожидаемый статус и шаг остановки; `slow`/`server-error` → `TransientSourceError`.
+- **Защита входа**: при хосте `vfsglobal.com` и заданных учётных данных пароль не вводится, результат `LOGIN_REQUIRED`.
+- **Фейковый адаптер** (только в тестах): для проверки ретраев, падений и очереди без браузера.
 - **Очередь**: два конкурентных захвата не получают одну задачу; просроченная аренда перехватывается; `MAX_CLAIMS` → `failed`; дубль активной задачи не создаётся; планировщик сдвигает `next_run_at`.
 - **Сервис проверки**: ретраи на `TransientSourceError` (`attempts=3`); без ретраев на CAPTCHA; падение адаптера → `ERROR`.
 - **slot_events**: APPEARED / CHANGED / DISAPPEARED; повтор без события; CAPTCHA/ERROR не влияют.
@@ -398,4 +446,4 @@ pytest + pytest-asyncio; интеграционные тесты на реаль
 - `README.md`: запуск (`docker compose up`), сценарий демо, примеры ответов API, добавление центра и оператора, масштабирование.
 - `LIMITATIONS.md`: наблюдения §2, что не делаем и почему, шаги интеграции: официальный API или партнёрство с VFS, оператор с ручной сессией, уведомления по `slot_events`, переход на брокер при росте.
 
-Сценарий созвона: `docker compose up` → `/docs` → `POST /adapters/vfs-…/check?wait=true` (live, `CAPTCHA_REQUIRED` + скриншот) → то же для demo (`AVAILABLE`) → `/checks`, `/slot-events` → `/dashboard` Live/Demo → остановка worker'а (`/health` = degraded) → добавление Ankara в YAML.
+Сценарий созвона: `docker compose up` → `/docs` → `POST /adapters/vfs-…/check?wait=true` (live, `CAPTCHA_REQUIRED` + скриншот) → `POST /adapters/mock-available/check?wait=true` (браузер проходит вход и выбор центра → `AVAILABLE`, скриншот) → `mock-slow` (ретраи в логах → `ERROR`) → `/checks`, `/slot-events` → `/dashboard` Live/Demo → остановка worker'а (`/health` = degraded) → добавление Ankara в YAML. Для наглядности worker можно запустить локально с `HEADFUL=true` — окно браузера видно.
