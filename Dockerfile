@@ -2,7 +2,7 @@
 # Base: python slim + Chromium installed via `playwright install --with-deps`.
 # (mcr.microsoft.com/playwright/python:v1.65.0-noble was unreachable from the build network.)
 FROM python:3.12-slim-bookworm AS base
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.10.10 /uv /uvx /bin/
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/app/.venv \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH"

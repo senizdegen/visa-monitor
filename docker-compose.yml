@@ -1,6 +1,9 @@
+x-env-file: &env-file
+  - path: .env
+    required: false
+
 x-app-env: &app-env
   DATABASE_URL: postgresql+asyncpg://alay:alay@postgres:5432/alay
-  ADAPTERS_FILE: /app/adapters.yaml
   EVIDENCE_DIR: /data/evidence
 
 services:
@@ -25,7 +28,10 @@ services:
     build: {context: ., target: runtime}
     command: ["sh", "-c", "alembic upgrade head && python -m alay.sync_adapters"]
     restart: "no"
-    environment: *app-env
+    env_file: *env-file
+    environment:
+      <<: *app-env
+      ADAPTERS_FILE: /app/adapters.yaml
     volumes:
       - ./adapters.yaml:/app/adapters.yaml:ro
     depends_on:
@@ -36,6 +42,7 @@ services:
     command: ["uvicorn", "alay.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "${API_PORT:-8000}:8000"
+    env_file: *env-file
     environment: *app-env
     volumes:
       - evidence:/data/evidence
@@ -46,6 +53,7 @@ services:
     build: {context: ., target: runtime}
     command: ["python", "-m", "alay.worker"]
     stop_grace_period: 75s   # SHUTDOWN_GRACE_S is 60; Docker's default 10s would SIGKILL mid-drain
+    env_file: *env-file
     environment: *app-env
     volumes:
       - evidence:/data/evidence
@@ -56,6 +64,7 @@ services:
   mock-vfs:
     build: {context: ., target: runtime}
     command: ["uvicorn", "alay.mock_vfs.app:app", "--host", "0.0.0.0", "--port", "8081"]
+    env_file: *env-file
     ports:
       - "8081:8081"
 
