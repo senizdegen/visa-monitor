@@ -1,3 +1,8 @@
+x-app-env: &app-env
+  DATABASE_URL: postgresql+asyncpg://alay:alay@postgres:5432/alay
+  ADAPTERS_FILE: /app/adapters.yaml
+  EVIDENCE_DIR: /data/evidence
+
 services:
   postgres:
     image: postgres:16
@@ -16,5 +21,53 @@ services:
       timeout: 3s
       retries: 10
 
+  migrate:
+    build: {context: ., target: runtime}
+    command: ["sh", "-c", "alembic upgrade head && python -m alay.sync_adapters"]
+    restart: "no"
+    environment: *app-env
+    volumes:
+      - ./adapters.yaml:/app/adapters.yaml:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  api:
+    build: {context: ., target: runtime}
+    command: ["uvicorn", "alay.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment: *app-env
+    volumes:
+      - evidence:/data/evidence
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+  worker:
+    build: {context: ., target: runtime}
+    command: ["python", "-m", "alay.worker"]
+    stop_grace_period: 75s   # SHUTDOWN_GRACE_S is 60; Docker's default 10s would SIGKILL mid-drain
+    environment: *app-env
+    volumes:
+      - evidence:/data/evidence
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      mock-vfs: {condition: service_started}
+
+  mock-vfs:
+    build: {context: ., target: runtime}
+    command: ["uvicorn", "alay.mock_vfs.app:app", "--host", "0.0.0.0", "--port", "8081"]
+    ports:
+      - "8081:8081"
+
+  tests:
+    profiles: ["tests"]
+    build: {context: ., target: test}
+    command: ["pytest", "-p", "no:cacheprovider"]
+    environment:
+      TEST_DATABASE_URL: postgresql+asyncpg://alay:alay@postgres:5432/alay_test
+    depends_on:
+      postgres: {condition: service_healthy}
+
 volumes:
   pgdata:
+  evidence:

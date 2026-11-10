@@ -17,6 +17,161 @@ adapters:
       category: "Short Stay"
       subcategory: "Tourism"
 
+  # ---- Demo adapters against the local mock VFS (source: demo) ----
+  - id: mock-istanbul-tourism
+    adapter_type: vfs_global
+    source: demo
+    source_country: Turkey
+    destination_country: France
+    provider: Mock VFS (demo)
+    center: Istanbul
+    visa_category: Tourism
+    timezone: Europe/Istanbul
+    interval_minutes: 1
+    enabled: true
+    config:
+      start_url: "http://mock-vfs:8081/rotate/login"
+      category: "Short Stay"
+      subcategory: "Tourism"
+      login: true
+
+  - id: mock-available
+    adapter_type: vfs_global
+    source: demo
+    source_country: Turkey
+    destination_country: France
+    provider: Mock VFS (demo)
+    center: Istanbul
+    visa_category: Tourism
+    timezone: Europe/Istanbul
+    interval_minutes: 1
+    enabled: false
+    config:
+      start_url: "http://mock-vfs:8081/available/login"
+      category: "Short Stay"
+      subcategory: "Tourism"
+      login: true
+
+  - id: mock-no-slots
+    adapter_type: vfs_global
+    source: demo
+    source_country: Turkey
+    destination_country: France
+    provider: Mock VFS (demo)
+    center: Istanbul
+    visa_category: Tourism
+    timezone: Europe/Istanbul
+    interval_minutes: 1
+    enabled: false
+    config:
+      start_url: "http://mock-vfs:8081/no-slots/login"
+      category: "Short Stay"
+      subcategory: "Tourism"
+      login: true
+
+  - id: mock-waitlist
+    adapter_type: vfs_global
+    source: demo
+    source_country: Turkey
+    destination_country: France
+    provider: Mock VFS (demo)
+    center: Istanbul
+    visa_category: Tourism
+    timezone: Europe/Istanbul
+    interval_minutes: 1
+    enabled: false
+    config:
+      start_url: "http://mock-vfs:8081/waitlist/login"
+      category: "Short Stay"
+      subcategory: "Tourism"
+      login: true
+
+  - id: mock-captcha
+    adapter_type: vfs_global
+    source: demo
+    source_country: Turkey
+    destination_country: France
+    provider: Mock VFS (demo)
+    center: Istanbul
+    visa_category: Tourism
+    timezone: Europe/Istanbul
+    interval_minutes: 1
+    enabled: false
+    config:
+      start_url: "http://mock-vfs:8081/captcha/login"
+      category: "Short Stay"
+      subcategory: "Tourism"
+      login: true
+
+  - id: mock-login-wall
+    adapter_type: vfs_global
+    source: demo
+    source_country: Turkey
+    destination_country: France
+    provider: Mock VFS (demo)
+    center: Istanbul
+    visa_category: Tourism
+    timezone: Europe/Istanbul
+    interval_minutes: 1
+    enabled: false
+    config:
+      start_url: "http://mock-vfs:8081/login-wall/login"
+      category: "Short Stay"
+      subcategory: "Tourism"
+      login: false
+
+  - id: mock-server-error
+    adapter_type: vfs_global
+    source: demo
+    source_country: Turkey
+    destination_country: France
+    provider: Mock VFS (demo)
+    center: Istanbul
+    visa_category: Tourism
+    timezone: Europe/Istanbul
+    interval_minutes: 1
+    enabled: false
+    config:
+      start_url: "http://mock-vfs:8081/server-error/login"
+      category: "Short Stay"
+      subcategory: "Tourism"
+      login: true
+
+  - id: mock-slow
+    adapter_type: vfs_global
+    source: demo
+    source_country: Turkey
+    destination_country: France
+    provider: Mock VFS (demo)
+    center: Istanbul
+    visa_category: Tourism
+    timezone: Europe/Istanbul
+    interval_minutes: 1
+    enabled: false
+    config:
+      start_url: "http://mock-vfs:8081/slow/login"
+      category: "Short Stay"
+      subcategory: "Tourism"
+      login: true
+      timeout_s: 10
+
+  - id: mock-changed-layout
+    adapter_type: vfs_global
+    source: demo
+    source_country: Turkey
+    destination_country: France
+    provider: Mock VFS (demo)
+    center: Istanbul
+    visa_category: Tourism
+    timezone: Europe/Istanbul
+    interval_minutes: 1
+    enabled: false
+    config:
+      start_url: "http://mock-vfs:8081/changed-layout/login"
+      category: "Short Stay"
+      subcategory: "Tourism"
+      login: true
+
   # - id: vfs-tur-fra-ankara-tourism
   #   adapter_type: vfs_global
   #   source: live
