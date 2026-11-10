@@ -15,6 +15,8 @@ def compute_slot_event(
 ) -> tuple[SlotEventType, list[date], list[date]] | None:
     """Spec §5.4: diff against previous dates; indeterminate statuses never produce events."""
     if result.status == CheckStatus.AVAILABLE:
+        if not result.available_dates:
+            return None  # slots without concrete dates: indeterminate for the date diff
         current = sorted(set(result.available_dates))
     elif result.status in (CheckStatus.NO_SLOTS, CheckStatus.WAITLIST):
         current = []

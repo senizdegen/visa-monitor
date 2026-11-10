@@ -48,3 +48,9 @@ def test_indeterminate_status_never_creates_event(spec, status):
     r = spec.result(CheckStatus(status), **kw)
     assert compute_slot_event([D1], r) is None
     assert compute_slot_event([], r) is None
+
+
+@pytest.mark.parametrize("previous", [[D1], []])
+def test_available_without_dates_is_indeterminate(spec, previous):
+    r = spec.result(CheckStatus.AVAILABLE, slots_count=3)
+    assert compute_slot_event(previous, r) is None
