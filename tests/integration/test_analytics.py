@@ -234,3 +234,40 @@ async def test_analytics_endpoint_defaults_to_live(sessionmaker):
         assert len(d.json()["timeline"]) == 7
         for bad in ({"source": "x"}, {"timeline": "1h"}):
             assert (await c.get("/analytics", params=bad)).status_code == 422
+
+
+async def test_timeline_bucket_edges_unchanged(sessionmaker):
+    # First hourly bucket for NOW starts 2026-11-09T16:00+03:00 == 13:00 UTC.
+    first = datetime(2026, 11, 9, 13, 0, tzinfo=UTC)
+    async with sessionmaker() as s:
+        await add_check(s, "NO_SLOTS", at=first)
+        await add_check(s, "NO_SLOTS", at=first - timedelta(microseconds=1))
+        await add_check(s, "NO_SLOTS", at=NOW)
+        await add_check(s, "NO_SLOTS", at=NOW + timedelta(microseconds=1))
+        await s.commit()
+    tl = (await run(sessionmaker)).timeline
+    assert tl[0].checks == 1
+    assert tl[-1].checks == 1
+    assert sum(b.checks for b in tl) == 2
+
+
+async def test_timeline_query_bounds_checked_at_from_below(sessionmaker):
+    import re
+
+    from sqlalchemy import text
+
+    async with sessionmaker() as s:
+        await add_check(s, "NO_SLOTS")
+        await s.commit()
+        orig = s.execute
+        captured = []
+
+        async def spy(stmt, params=None, *a, **k):
+            captured.append((stmt, params))
+            return await orig(stmt, params, *a, **k)
+
+        s.execute = spy
+        await compute_analytics(s, source=Source.LIVE, adapter_id=None, now=NOW, min_checks=5)
+        stmt, params = next((st, p) for st, p in captured if "generate_series" in str(st))
+        plan = "\n".join(r[0] for r in await orig(text("EXPLAIN " + str(stmt)), params))
+    assert re.search(r"checked_at >= ", plan), plan

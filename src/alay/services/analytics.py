@@ -54,10 +54,15 @@ _EVENTS = text(
     """
 )
 # unit is a validated constant (hour|day), never user input, so it is safe to inline.
+# `lower` is the start of the first bucket as timestamptz: a range bound on checked_at so the
+# planner can skip older rows; the bucket equality alone already excludes them.
 _TIMELINE = """
-    WITH b AS (
+    WITH w AS (
+      SELECT date_trunc('{unit}', CAST(:now AS timestamptz) AT TIME ZONE CAST(:tz AS text))
+             - (CAST(:n AS int) - 1) * CAST(:step AS interval) AS first_bucket
+    ), b AS (
       SELECT generate_series(
-        date_trunc('{unit}', CAST(:now AS timestamptz) AT TIME ZONE CAST(:tz AS text)) - (CAST(:n AS int) - 1) * CAST(:step AS interval),
+        (SELECT first_bucket FROM w),
         date_trunc('{unit}', CAST(:now AS timestamptz) AT TIME ZONE CAST(:tz AS text)),
         CAST(:step AS interval)
       ) AS bucket
@@ -66,6 +71,7 @@ _TIMELINE = """
     FROM b LEFT JOIN checks c
       ON date_trunc('{unit}', c.checked_at AT TIME ZONE CAST(:tz AS text)) = b.bucket
      AND c.source = :source AND (CAST(:adapter_id AS text) IS NULL OR c.adapter_id = CAST(:adapter_id AS text))
+     AND c.checked_at >= (SELECT first_bucket FROM w) AT TIME ZONE CAST(:tz AS text)
      AND c.checked_at <= CAST(:now AS timestamptz)
     GROUP BY b.bucket, c.status
     ORDER BY b.bucket

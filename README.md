@@ -8,7 +8,7 @@ Backend-модуль мониторинга визовых записей. Пе�
 
 ## Быстрый старт
 
-Нужны Docker и Docker Compose. Первая сборка скачивает Chromium, это несколько минут.
+Нужны Docker и Docker Compose ≥ 2.24 (в `docker-compose.yml` используется длинная форма `env_file` с `required: false`). Первая сборка скачивает Chromium, это несколько минут.
 
 ```bash
 docker compose up -d --build
@@ -129,6 +129,8 @@ docker compose run --rm migrate
 ```
 
 Адаптеры, удалённые из YAML, получают `enabled=false`, история сохраняется.
+
+`migrate` отклоняет файл с ошибкой, в которой назван `id` адаптера, если: `id` повторяется; `timezone` не существует (например, `Europe/Instanbul`); `source: live` указывает на хост из `LOGIN_ALLOWED_HOSTS` (`mock-vfs`, `localhost`) — страницы учебного сайта не могут попасть в данные как live.
 
 ## Добавить оператора
 

@@ -68,7 +68,14 @@
   function q(sel) { return document.querySelector(sel); }
   function el(tag, text) { var e = document.createElement(tag); if (text !== undefined) { e.textContent = text; } return e; }
   function val(v, suffix) { return (v === null || v === undefined) ? DASH : String(v) + (suffix || ""); }
-  function fmtTime(s) { return s ? s.replace("T", " ").slice(0, 19) : DASH; }
+  // "2026-11-11T14:05:09.1+03:00" -> "2026-11-11 14:05 (+03:00)"; the offset is always shown
+  // because API times are in the adapter's timezone and generated_at is UTC ("Z").
+  var TIME_RE = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+  function fmtTime(s) {
+    var m = s ? TIME_RE.exec(s) : null;
+    if (!m) { return s || DASH; }
+    return m[1] + " " + m[2] + " (" + (m[3] === "Z" ? "+00:00" : m[3]) + ")";
+  }
   function getJSON(path, params) {
     var qs = new URLSearchParams(params).toString();
     return fetch(path + "?" + qs).then(function (r) {
@@ -100,7 +107,7 @@
       Object.keys(b.by_status || {}).forEach(function (s) { if (statuses.indexOf(s) < 0) { statuses.push(s); } });
     });
     var data = {
-      labels: timeline.map(function (b) { return b.bucket; }),
+      labels: timeline.map(function (b) { return fmtTime(b.bucket); }),
       datasets: statuses.map(function (s) {
         return {label: s, backgroundColor: COLORS[s] || "#999",
           data: timeline.map(function (b) { return (b.by_status || {})[s] || 0; })};
