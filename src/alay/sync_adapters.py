@@ -13,7 +13,11 @@ log = logging.getLogger("alay.sync_adapters")
 async def main() -> None:
     settings = get_settings()
     setup_logging(settings.log_level)
-    specs = load_adapters_file(Path(settings.adapters_file), settings.default_interval_minutes)
+    specs = load_adapters_file(
+        Path(settings.adapters_file),
+        settings.default_interval_minutes,
+        login_allowed_hosts=settings.login_allowed_hosts,
+    )
     engine = create_engine(settings.database_url)
     try:
         async with make_sessionmaker(engine)() as session:

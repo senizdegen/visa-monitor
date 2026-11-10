@@ -80,3 +80,37 @@ async def test_non_login_page_without_login_is_unknown(make_adapter, mock_site):
     r = await adapter.check()
     assert r.status == "UNKNOWN"
     assert r.raw["step"] == "open"
+
+
+@pytest.mark.parametrize("scenario", ["waitlist", "no-slots", "available"])
+async def test_slot_text_on_open_page_is_unknown(make_adapter, mock_site, scenario):
+    # A page reached by goto (step `open`) that merely contains slot wording must not
+    # yield a slot status: only the result block at step `result` may (finding 1).
+    adapter = make_adapter(
+        "available",
+        login=False,
+        start_url=f"{mock_site}/api/slots?scenario={scenario}&centre=Istanbul",
+    )
+    r = await adapter.check()
+    assert r.status == "UNKNOWN"
+    assert r.raw["step"] == "open"
+    assert r.raw["rule"] == "slot_marker_outside_result"
+
+
+async def test_live_source_never_logs_in_even_on_allowed_host(make_adapter, monkeypatch):
+    from playwright.async_api import Locator
+
+    filled = []
+    orig = Locator.fill
+
+    async def spy(self, *a, **k):
+        filled.append(a)
+        return await orig(self, *a, **k)
+
+    monkeypatch.setattr(Locator, "fill", spy)
+    r = await make_adapter("available", source="live").check()
+    assert r.status == "LOGIN_REQUIRED"
+    assert r.source == "live"
+    assert r.raw["login_blocked"] is True
+    assert r.raw["step"] == "login"
+    assert filled == []

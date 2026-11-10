@@ -63,12 +63,13 @@ adapters:
     visa_category: Tourism
 {extra}
 """
+HOSTS = ["mock-vfs", "localhost"]
 
 
 def test_load_file_applies_default_interval(tmp_path):
     p = tmp_path / "a.yaml"
     p.write_text(ENTRY.format(id="ok-one", extra=""), encoding="utf-8")
-    specs = load_adapters_file(p, 42)
+    specs = load_adapters_file(p, 42, login_allowed_hosts=HOSTS)
     assert [(s.id, s.interval_minutes) for s in specs] == [("ok-one", 42)]
 
 
@@ -76,7 +77,7 @@ def test_load_file_error_names_adapter(tmp_path):
     p = tmp_path / "a.yaml"
     p.write_text(ENTRY.format(id="bad-one", extra="    interval_minutes: 0"), encoding="utf-8")
     with pytest.raises(AdaptersFileError) as e:
-        load_adapters_file(p, 60)
+        load_adapters_file(p, 60, login_allowed_hosts=HOSTS)
     assert "bad-one" in str(e.value)
     assert "interval_minutes" in str(e.value)
 
@@ -86,10 +87,65 @@ def test_load_file_rejects_malformed_structure(tmp_path, content):
     p = tmp_path / "a.yaml"
     p.write_text(content, encoding="utf-8")
     with pytest.raises(AdaptersFileError):
-        load_adapters_file(p, 60)
+        load_adapters_file(p, 60, login_allowed_hosts=HOSTS)
 
 
 def test_load_file_explicit_empty_list_ok(tmp_path):
     p = tmp_path / "a.yaml"
     p.write_text("adapters: []\n", encoding="utf-8")
-    assert load_adapters_file(p, 60) == []
+    assert load_adapters_file(p, 60, login_allowed_hosts=HOSTS) == []
+
+
+def test_load_file_rejects_unknown_timezone(tmp_path):
+    p = tmp_path / "a.yaml"
+    p.write_text(ENTRY.format(id="tz-typo", extra="    timezone: Europe/Instanbul"), encoding="utf-8")
+    with pytest.raises(AdaptersFileError) as e:
+        load_adapters_file(p, 60, login_allowed_hosts=HOSTS)
+    assert "tz-typo" in str(e.value)
+    assert "timezone" in str(e.value)
+    assert "Europe/Instanbul" in str(e.value)
+
+
+def test_load_file_rejects_duplicate_ids(tmp_path):
+    p = tmp_path / "a.yaml"
+    body = ENTRY.format(id="dup-one", extra="")
+    second = body.split("adapters:\n", 1)[1]
+    p.write_text(body + second, encoding="utf-8")
+    with pytest.raises(AdaptersFileError) as e:
+        load_adapters_file(p, 60, login_allowed_hosts=HOSTS)
+    assert "dup-one" in str(e.value)
+    assert "duplicate" in str(e.value)
+
+
+LIVE_ON_MOCK = """    config:
+      start_url: "http://mock-vfs:8081/available/login"
+      category: "Short Stay"
+      subcategory: "Tourism"
+      login: true"""
+
+
+def test_load_file_rejects_live_adapter_on_login_allowed_host(tmp_path):
+    p = tmp_path / "a.yaml"
+    p.write_text(ENTRY.format(id="fake-live", extra=LIVE_ON_MOCK), encoding="utf-8")
+    with pytest.raises(AdaptersFileError) as e:
+        load_adapters_file(p, 60, login_allowed_hosts=HOSTS)
+    assert "fake-live" in str(e.value)
+    assert "mock-vfs" in str(e.value)
+
+
+def test_load_file_accepts_demo_adapter_on_login_allowed_host(tmp_path):
+    p = tmp_path / "a.yaml"
+    text = ENTRY.format(id="real-demo", extra=LIVE_ON_MOCK).replace("source: live", "source: demo")
+    p.write_text(text, encoding="utf-8")
+    assert [s.id for s in load_adapters_file(p, 60, login_allowed_hosts=HOSTS)] == ["real-demo"]
+
+
+def test_repo_adapters_yaml_loads_with_default_hosts():
+    from pathlib import Path
+
+    from alay.config import Settings
+
+    hosts = Settings(_env_file=None).login_allowed_hosts
+    root = Path(__file__).resolve().parents[2]
+    specs = load_adapters_file(root / "adapters.yaml", 60, login_allowed_hosts=hosts)
+    assert {s.source for s in specs if s.id.startswith("mock-")} == {"demo"}

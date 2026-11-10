@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from alay.adapters.base import BaseAdapter
 from alay.adapters.registry import register
 from alay.adapters.vfs_classifier import PageSnapshot, VfsMarkers, classify
-from alay.domain import CheckResult, CheckStatus, TransientSourceError
+from alay.domain import AdapterSpec, CheckResult, CheckStatus, Source, TransientSourceError
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +41,28 @@ class VfsConfig(BaseModel):
 def login_allowed(start_url: str, allowed_hosts: list[str]) -> bool:
     host = urlparse(start_url).hostname
     return host is not None and host in allowed_hosts
+
+
+SLOT_STATUSES = frozenset({CheckStatus.AVAILABLE, CheckStatus.NO_SLOTS, CheckStatus.WAITLIST})
+
+
+def classify_step(
+    snapshot: PageSnapshot, spec: AdapterSpec, markers: VfsMarkers | None = None
+) -> CheckResult:
+    """classify(), but slot statuses only from the slot block read at step `result`.
+
+    Anywhere else (the page after goto, or a page left by a timeout) a slot marker is just a
+    substring somewhere in the HTML (scripts, footers, help text), so it is reported as UNKNOWN.
+    """
+    result = classify(snapshot, spec, markers)
+    from_result_block = snapshot.step == "result" and snapshot.result_text is not None
+    if result.status in SLOT_STATUSES and not from_result_block:
+        return spec.result(
+            CheckStatus.UNKNOWN,
+            response_time_ms=result.response_time_ms,
+            raw={**result.raw, "rule": "slot_marker_outside_result", "marker_rule": result.raw["rule"]},
+        )
+    return result
 
 
 @register("vfs_global")
@@ -83,13 +105,17 @@ class VfsGlobalAdapter(BaseAdapter):
         rt = int((time.monotonic() - started) * 1000)
         status = response.status if response else None
 
-        first = classify(await self._snapshot(page, "open", status, rt), self.spec, cfg.markers)
+        first = classify_step(await self._snapshot(page, "open", status, rt), self.spec, cfg.markers)
         if first.status not in (CheckStatus.LOGIN_REQUIRED, CheckStatus.UNKNOWN):
             return first
 
         step = "login"
         try:
-            allowed = login_allowed(cfg.start_url, self.ctx.settings.login_allowed_hosts)
+            # Automated login only into the local training site: a `source: live` spec never
+            # logs in, even if its start_url points at an allowed (mock) host.
+            allowed = self.spec.source is Source.DEMO and login_allowed(
+                cfg.start_url, self.ctx.settings.login_allowed_hosts
+            )
             if not (cfg.login and allowed):
                 if first.status is CheckStatus.UNKNOWN:
                     return first
@@ -123,8 +149,10 @@ class VfsGlobalAdapter(BaseAdapter):
             await box.wait_for()
             text = await box.inner_text()
         except PlaywrightTimeout:
-            return classify(await self._snapshot(page, step, None, rt), self.spec, cfg.markers)
-        return classify(await self._snapshot(page, "result", None, rt, text), self.spec, cfg.markers)
+            snap = await self._snapshot(page, step, None, rt)
+            return classify_step(snap, self.spec, cfg.markers)
+        snap = await self._snapshot(page, "result", None, rt, text)
+        return classify_step(snap, self.spec, cfg.markers)
 
     async def _attach_screenshot(self, page: Page, result: CheckResult) -> CheckResult:
         rel = f"{self.spec.id}/{result.checked_at:%Y%m%dT%H%M%S}.png"

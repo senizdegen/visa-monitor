@@ -46,11 +46,13 @@ async def browser():
 
 @pytest.fixture
 def make_adapter(mock_site, browser, tmp_path: Path):
-    def make(scenario, *, login=True, timeout_s=2, allowed_hosts=("127.0.0.1",), **cfg):
+    def make(
+        scenario, *, login=True, timeout_s=2, allowed_hosts=("127.0.0.1",), source="demo", **cfg
+    ):
         spec = AdapterSpec(
             id="vfs-demo",
             adapter_type="vfs_global",
-            source="demo",
+            source=source,
             source_country="Turkey",
             destination_country="France",
             provider="Mock VFS",

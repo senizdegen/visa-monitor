@@ -71,3 +71,15 @@ def test_transient_error_str():
     assert str(TransientSourceError("timeout", "nav 30s")) == "timeout: nav 30s"
     e = TransientSourceError("http_503")
     assert str(e) == "http_503" and e.code == "http_503"
+
+
+@pytest.mark.parametrize("tz", ["Europe/Instanbul", "", "Not/AZone", "../etc/passwd"])
+def test_adapter_spec_rejects_unknown_timezone(tz):
+    with pytest.raises(ValidationError) as e:
+        AdapterSpec(**BASE, interval_minutes=60, timezone=tz)
+    assert "unknown timezone" in str(e.value)
+    assert e.value.errors()[0]["loc"] == ("timezone",)
+
+
+def test_adapter_spec_accepts_valid_timezone():
+    assert AdapterSpec(**BASE, interval_minutes=60, timezone="Europe/Paris").timezone == "Europe/Paris"

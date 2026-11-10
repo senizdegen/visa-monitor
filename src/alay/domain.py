@@ -1,8 +1,9 @@
 from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from pydantic import AwareDatetime, BaseModel, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
 
 class CheckStatus(StrEnum):
@@ -79,6 +80,16 @@ class AdapterSpec(BaseModel, extra="forbid"):
     config: dict[str, Any] = {}
     interval_minutes: int = Field(gt=0)
     enabled: bool = True
+
+    @field_validator("timezone")
+    @classmethod
+    def _known_timezone(cls, v: str) -> str:
+        # A typo here would otherwise pass sync and crash every API view that renders times.
+        try:
+            ZoneInfo(v)
+        except Exception as e:  # ZoneInfoNotFoundError, ValueError (empty / bad path), ...
+            raise ValueError(f"unknown timezone {v!r}") from e
+        return v
 
     def result(self, status: CheckStatus, **fields: Any) -> CheckResult:
         return CheckResult(
