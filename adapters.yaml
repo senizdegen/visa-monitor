@@ -1,0 +1,51 @@
+# Source of truth for monitored adapters. After editing: docker compose run --rm migrate
+# Omitted interval_minutes -> DEFAULT_INTERVAL_MINUTES. Adapters removed from this file are disabled.
+adapters:
+  - id: vfs-tur-fra-istanbul-tourism
+    adapter_type: vfs_global
+    source: live
+    source_country: Turkey
+    destination_country: France
+    provider: VFS Global
+    center: Istanbul
+    visa_category: Tourism
+    timezone: Europe/Istanbul
+    interval_minutes: 60
+    enabled: true
+    config:
+      start_url: "https://visa.vfsglobal.com/tur/en/fra/login"
+      category: "Short Stay"
+      subcategory: "Tourism"
+
+  # - id: vfs-tur-fra-ankara-tourism
+  #   adapter_type: vfs_global
+  #   source: live
+  #   source_country: Turkey
+  #   destination_country: France
+  #   provider: VFS Global
+  #   center: Ankara
+  #   visa_category: Tourism
+  #   interval_minutes: 60
+  #   config: {start_url: "https://visa.vfsglobal.com/tur/en/fra/login", category: "Short Stay", subcategory: "Tourism"}
+  #
+  # - id: vfs-tur-fra-izmir-tourism
+  #   adapter_type: vfs_global
+  #   source: live
+  #   source_country: Turkey
+  #   destination_country: France
+  #   provider: VFS Global
+  #   center: Izmir
+  #   visa_category: Tourism
+  #   interval_minutes: 60
+  #   config: {start_url: "https://visa.vfsglobal.com/tur/en/fra/login", category: "Short Stay", subcategory: "Tourism"}
+  #
+  # - id: vfs-tur-fra-gaziantep-tourism
+  #   adapter_type: vfs_global
+  #   source: live
+  #   source_country: Turkey
+  #   destination_country: France
+  #   provider: VFS Global
+  #   center: Gaziantep
+  #   visa_category: Tourism
+  #   interval_minutes: 60
+  #   config: {start_url: "https://visa.vfsglobal.com/tur/en/fra/login", category: "Short Stay", subcategory: "Tourism"}
