@@ -67,4 +67,16 @@ async def test_adapter_refuses_login_on_disallowed_host(make_adapter, monkeypatc
     r = await make_adapter("available", allowed_hosts=["mock-vfs"]).check()
     assert r.status == "LOGIN_REQUIRED"
     assert r.raw["login_blocked"] is True
+    assert r.raw["step"] == "login"
     assert filled == []
+
+
+async def test_non_login_page_without_login_is_unknown(make_adapter, mock_site):
+    adapter = make_adapter(
+        "available",
+        login=False,
+        start_url=f"{mock_site}/api/slots?scenario=server-error&centre=Istanbul",
+    )
+    r = await adapter.check()
+    assert r.status == "UNKNOWN"
+    assert r.raw["step"] == "open"

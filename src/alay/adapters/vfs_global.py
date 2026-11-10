@@ -91,6 +91,8 @@ class VfsGlobalAdapter(BaseAdapter):
         try:
             allowed = login_allowed(cfg.start_url, self.ctx.settings.login_allowed_hosts)
             if not (cfg.login and allowed):
+                if first.status is CheckStatus.UNKNOWN:
+                    return first
                 return self.spec.result(
                     CheckStatus.LOGIN_REQUIRED,
                     response_time_ms=rt,
