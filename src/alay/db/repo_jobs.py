@@ -40,7 +40,9 @@ async def enqueue_due(session: AsyncSession, *, live_enabled: bool) -> int:
         select(AdapterRow.id)
         .where(AdapterRow.enabled, AdapterRow.next_run_at <= func.now())
         .order_by(AdapterRow.id)
-        .with_for_update(skip_locked=True)
+        # NO KEY UPDATE, not UPDATE: a concurrent check_jobs INSERT takes FOR KEY SHARE on the
+        # adapter (FK check); FOR UPDATE would block it and deadlock on uq_check_jobs_active.
+        .with_for_update(skip_locked=True, key_share=True)
     )
     if not live_enabled:
         stmt = stmt.where(AdapterRow.source != str(Source.LIVE))
@@ -106,7 +108,8 @@ _CLAIM_SQL = text(
            started_at = coalesce(started_at, now()),
            claim_count = claim_count + 1
     WHERE id IN (SELECT id FROM check_jobs
-                 WHERE status = 'pending' OR (status = 'running' AND locked_until < now())
+                 WHERE status = 'pending'
+                    OR (status = 'running' AND locked_until < now() AND claim_count < :max_claims)
                  ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT :free)
     RETURNING id, adapter_id, trigger, claim_count, created_at
     """
@@ -114,17 +117,24 @@ _CLAIM_SQL = text(
 
 
 async def claim_jobs(
-    session: AsyncSession, *, worker_id: str, limit: int, lease_s: int
+    session: AsyncSession, *, worker_id: str, limit: int, lease_s: int, max_claims: int
 ) -> list[ClaimedJob]:
     """§7.2: atomically lease up to ``limit`` pending or lease-expired jobs (commits itself).
 
-    Callers should run ``fail_exhausted_jobs`` first so jobs past MAX_CLAIMS are failed, not reclaimed.
+    An expired job is reclaimed only while ``claim_count < max_claims``; exhausted jobs are left
+    for ``fail_exhausted_jobs`` (same condition, so the two can never both take a job).
     """
     if limit <= 0:
         return []
     rows = (
         await session.execute(
-            _CLAIM_SQL, {"me": worker_id, "lease": timedelta(seconds=lease_s), "free": limit}
+            _CLAIM_SQL,
+            {
+                "me": worker_id,
+                "lease": timedelta(seconds=lease_s),
+                "free": limit,
+                "max_claims": max_claims,
+            },
         )
     ).all()
     if not rows:

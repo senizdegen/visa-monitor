@@ -127,8 +127,8 @@ async def test_concurrent_claims_never_share_a_job(sessionmaker, adapter_spec):
             await sa.connection()
             await sb.connection()
             got_a, got_b = await asyncio.gather(
-                claim_jobs(sa, worker_id="worker-a", limit=10, lease_s=180),
-                claim_jobs(sb, worker_id="worker-b", limit=10, lease_s=180),
+                claim_jobs(sa, worker_id="worker-a", limit=10, lease_s=180, max_claims=3),
+                claim_jobs(sb, worker_id="worker-b", limit=10, lease_s=180, max_claims=3),
             )
         ids_a = {j.job_id for j in got_a}
         ids_b = {j.job_id for j in got_b}
@@ -147,15 +147,15 @@ async def test_expired_lease_is_reclaimed(sessionmaker, adapter_spec):
     async with sessionmaker() as s:
         job, _ = await create_manual_job(s, adapter_spec.id)
     async with sessionmaker() as s:
-        [first] = await claim_jobs(s, worker_id="a", limit=5, lease_s=0)
+        [first] = await claim_jobs(s, worker_id="a", limit=5, lease_s=0, max_claims=3)
     assert first.spec == adapter_spec and first.claim_count == 1
     async with sessionmaker() as s:
         started = (await get_job(s, job.id)).started_at
     async with sessionmaker() as s:
-        [second] = await claim_jobs(s, worker_id="b", limit=5, lease_s=180)
+        [second] = await claim_jobs(s, worker_id="b", limit=5, lease_s=180, max_claims=3)
     assert second.job_id == job.id and second.claim_count == 2
     async with sessionmaker() as s:
-        assert await claim_jobs(s, worker_id="c", limit=5, lease_s=180) == []
+        assert await claim_jobs(s, worker_id="c", limit=5, lease_s=180, max_claims=3) == []
     async with sessionmaker() as s:
         row = await get_job(s, job.id)
     assert (row.status, row.locked_by, row.claim_count) == ("running", "b", 2)
@@ -213,3 +213,44 @@ async def test_exhausted_job_fails_with_error_check(sessionmaker, adapter_spec):
 async def test_get_job_missing_returns_none(sessionmaker):
     async with sessionmaker() as s:
         assert await get_job(s, uuid.uuid4()) is None
+
+
+async def test_exhausted_expired_job_is_not_reclaimed(sessionmaker, adapter_spec):
+    await _add(sessionmaker, adapter_spec)
+    async with sessionmaker() as s:
+        await s.execute(
+            text(
+                "INSERT INTO check_jobs (adapter_id, trigger, status, claim_count, locked_by, locked_until,"
+                " started_at) VALUES (:a, 'scheduled', 'running', 3, 'dead', now() - interval '1 minute', now())"
+            ),
+            {"a": adapter_spec.id},
+        )
+        await s.commit()
+    async with sessionmaker() as s:
+        assert await claim_jobs(s, worker_id="w", limit=5, lease_s=180, max_claims=3) == []
+    async with sessionmaker() as s:
+        assert await fail_exhausted_jobs(s, max_claims=3) == 1
+    [job] = await _jobs(sessionmaker)
+    assert (job.status, job.claim_count, job.error) == ("failed", 3, "worker_lost")
+
+
+async def test_enqueue_and_manual_job_race_without_deadlock(sessionmaker, adapter_spec):
+    await _add(sessionmaker, adapter_spec)
+    for _round in range(20):
+        async with sessionmaker() as s:
+            await s.execute(text("UPDATE check_jobs SET status = 'done' WHERE status IN ('pending','running')"))
+            await s.execute(text("UPDATE adapters SET next_run_at = now() - interval '1 minute'"))
+            await s.commit()
+        async with sessionmaker() as sa, sessionmaker() as sb:
+            await sa.connection()
+            await sb.connection()
+            results = await asyncio.gather(
+                enqueue_due(sa, live_enabled=True),
+                create_manual_job(sb, adapter_spec.id),
+                return_exceptions=True,  # both must finish before the sessions close
+            )
+        assert not [r for r in results if isinstance(r, BaseException)], results
+        created, (job, dedup) = results
+        assert created + (0 if dedup else 1) == 1
+        active = [j for j in await _jobs(sessionmaker) if j.status in ("pending", "running")]
+        assert [j.id for j in active] == [job.id]

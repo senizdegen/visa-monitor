@@ -1,5 +1,6 @@
 from datetime import UTC, date, datetime, timedelta
 
+import pytest
 from sqlalchemy import func, select, text
 
 from alay.db.models import SlotEventRow
@@ -29,7 +30,7 @@ async def _claimed(sessionmaker, spec, worker="w1"):
     async with sessionmaker() as s:
         job, _ = await create_manual_job(s, spec.id)
     async with sessionmaker() as s:
-        [claimed] = await claim_jobs(s, worker_id=worker, limit=1, lease_s=180)
+        [claimed] = await claim_jobs(s, worker_id=worker, limit=1, lease_s=180, max_claims=3)
     assert claimed.job_id == job.id
     return claimed
 
@@ -215,3 +216,16 @@ async def test_latest_per_adapter(sessionmaker, adapter_spec):
         ]
         rows = await latest_per_adapter(s, source="live")
         assert [(r.adapter_id, r.status) for r in rows] == [(live.id, "NO_SLOTS")]
+
+
+async def test_save_outcome_rejects_spec_of_other_adapter(sessionmaker, adapter_spec):
+    other = adapter_spec.model_copy(update={"id": "other"})
+    await _add(sessionmaker, adapter_spec, other)
+    claimed = await _claimed(sessionmaker, adapter_spec)
+    outcome = CheckOutcome(other.result(CheckStatus.NO_SLOTS), attempts=1, duration_ms=5)
+    async with sessionmaker() as s:
+        with pytest.raises(ValueError, match="adapter"):
+            await save_outcome(s, job_id=claimed.job_id, worker_id="w1", spec=other, outcome=outcome)
+    async with sessionmaker() as s:
+        assert await check_for_job(s, claimed.job_id) is None
+        assert (await get_job(s, claimed.job_id)).status == "running"

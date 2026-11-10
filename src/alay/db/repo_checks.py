@@ -56,7 +56,8 @@ async def save_outcome(
     """Persist a check result and finish its job in one transaction (commits itself).
 
     Returns False (and rolls back) if the job is no longer running under ``worker_id``
-    — i.e. the lease was taken over by another worker.
+    — i.e. the lease was taken over by another worker. Raises ``ValueError`` (after rollback)
+    if ``spec`` belongs to a different adapter than the job.
     """
     job = await session.scalar(
         select(CheckJobRow)
@@ -64,6 +65,10 @@ async def save_outcome(
         .with_for_update()
         .execution_options(populate_existing=True)
     )
+    if job is not None and job.adapter_id != spec.id:
+        msg = f"spec {spec.id!r} does not match job adapter {job.adapter_id!r}"
+        await session.rollback()  # expires job: build the message first
+        raise ValueError(msg)
     if job is None or job.status != "running" or job.locked_by != worker_id:
         await session.rollback()
         logger.warning(
@@ -75,7 +80,7 @@ async def save_outcome(
     result = outcome.result
     check = new_check_row(
         job_id=job_id,
-        adapter_id=spec.id,
+        adapter_id=job.adapter_id,
         result=result,
         attempts=outcome.attempts,
         duration_ms=outcome.duration_ms,
@@ -85,7 +90,7 @@ async def save_outcome(
 
     previous = await session.scalar(
         select(SlotEventRow.dates_after)
-        .where(SlotEventRow.adapter_id == spec.id)
+        .where(SlotEventRow.adapter_id == job.adapter_id)
         .order_by(SlotEventRow.detected_at.desc(), SlotEventRow.id.desc())
         .limit(1)
     )
@@ -94,7 +99,7 @@ async def save_outcome(
         kind, before, after = event
         session.add(
             SlotEventRow(
-                adapter_id=spec.id,
+                adapter_id=job.adapter_id,
                 check_id=check.id,
                 detected_at=result.checked_at,
                 event_type=str(kind),
