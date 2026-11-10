@@ -79,3 +79,17 @@ def test_load_file_error_names_adapter(tmp_path):
         load_adapters_file(p, 60)
     assert "bad-one" in str(e.value)
     assert "interval_minutes" in str(e.value)
+
+
+@pytest.mark.parametrize("content", ["", "- a\n- b\n", "adapter: []\n", "adapters: 5\n", "adapters:\n"])
+def test_load_file_rejects_malformed_structure(tmp_path, content):
+    p = tmp_path / "a.yaml"
+    p.write_text(content, encoding="utf-8")
+    with pytest.raises(AdaptersFileError):
+        load_adapters_file(p, 60)
+
+
+def test_load_file_explicit_empty_list_ok(tmp_path):
+    p = tmp_path / "a.yaml"
+    p.write_text("adapters: []\n", encoding="utf-8")
+    assert load_adapters_file(p, 60) == []

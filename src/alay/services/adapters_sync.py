@@ -19,9 +19,11 @@ def load_adapters_file(path: Path, default_interval: int) -> list[AdapterSpec]:
         data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as e:
         raise AdaptersFileError(f"cannot read {path}: {e}") from e
-    entries = data.get("adapters") if isinstance(data, dict) else None
-    if entries is None:
-        entries = []
+    if not isinstance(data, dict):
+        raise AdaptersFileError(f"{path}: top level must be a mapping with an 'adapters' key")
+    if "adapters" not in data:
+        raise AdaptersFileError(f"{path}: missing top-level 'adapters' key")
+    entries = data["adapters"]
     if not isinstance(entries, list):
         raise AdaptersFileError(f"{path}: 'adapters' must be a list")
     specs: list[AdapterSpec] = []
