@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Book appointment{% endblock %}
+{% block content %}
+<h1>Book appointment</h1>
+<label for="centre">Application Centre</label>
+<select id="centre"><option value="">Select</option>{% for c in centres %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select>
+<label for="category">Appointment Category</label>
+<select id="category"><option value="">Select</option>{% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select>
+<label for="subcategory">Sub-category</label>
+<select id="subcategory"><option value="">Select</option>{% for c in subcategories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select>
+<div id="result"></div>
+<script>
+  var ids = ["centre", "category", "subcategory"];
+  async function refresh() {
+    var v = ids.map(function (i) { return document.getElementById(i).value; });
+    var box = document.getElementById("result");
+    if (v.some(function (x) { return !x; })) { box.innerHTML = ""; return; }
+    var q = new URLSearchParams({scenario: "{{ scenario }}", centre: v[0], category: v[1], subcategory: v[2]});
+    var data = await (await fetch("/api/slots?" + q)).json();
+    var div = document.createElement("div");
+    div.className = "alert";
+    div.setAttribute("data-testid", "slot-result");
+    div.textContent = data.message;
+    box.innerHTML = "";
+    box.appendChild(div);
+  }
+  ids.forEach(function (i) { document.getElementById(i).addEventListener("change", refresh); });
+</script>
+{% endblock %}

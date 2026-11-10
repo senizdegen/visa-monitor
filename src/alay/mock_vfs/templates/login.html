@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<h1>Sign in</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<div id="app">Loading...</div>
+<script>
+  // Form is injected after ~0.5s, like a client-rendered SPA.
+  setTimeout(function () {
+    document.getElementById("app").innerHTML =
+      '<form method="post" action="/{{ scenario }}/login">' +
+      '<label for="email">Email</label><input id="email" name="email" type="email">' +
+      '<label for="password">Password</label><input type="password" id="password" name="password">' +
+      '<button type="submit">Sign In</button></form>';
+  }, 500);
+</script>
+{% endblock %}
