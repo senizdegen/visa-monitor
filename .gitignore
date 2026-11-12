@@ -1,5 +1,61 @@
-.venv/
+# --- Python ---
 __pycache__/
-data/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+pip-wheel-metadata/
+
+# --- Virtual envs ---
+.venv/
+venv/
+env/
+
+# --- Secrets / config ---
 .env
+.env.*
+!.env.example
+
+# --- Tests / coverage ---
 .pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+.hypothesis/
+
+# --- Linters / type checkers ---
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.pytype/
+
+# --- Local data / logs ---
+data/
+*.log
+logs/
+*.sqlite3
+*.db
+
+# --- Docker (local overrides) ---
+docker-compose.override.yml
+
+# --- IDE / editors ---
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- AI tooling (раскомментируй, если не хочешь коммитить) ---
+# .superpowers/
+# .claude/settings.local.json
